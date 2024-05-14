@@ -1,0 +1,173 @@
+The error you're encountering indicates that the `CustomUser` model is missing some required methods and properties for Django's admin interface. Specifically, the methods `has_module_perms` and `has_perm` need to be defined.
+
+Here's how to update your `CustomUser` model to include these methods:
+
+### Update `CustomUser` Model
+
+Add the missing methods in your `CustomUser` model (`accounts/models.py`):
+
+```python
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+
+class CustomUserManager(BaseUserManager):
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError('The Email field must be set')
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+
+        return self.create_user(email, password, **extra_fields)
+
+class CustomUser(AbstractBaseUser, PermissionsMixin):
+    email = models.EmailField(unique=True)
+    first_name = models.CharField(max_length=30)
+    last_name = models.CharField(max_length=30)
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+    is_superuser = models.BooleanField(default=False)
+
+    objects = CustomUserManager()
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
+
+    def __str__(self):
+        return self.email
+
+    def has_perm(self, perm, obj=None):
+        return self.is_superuser
+
+    def has_module_perms(self, app_label):
+        return self.is_superuser
+```
+
+### Migrate Changes
+
+After updating your model, make sure to apply the changes by creating and running migrations:
+
+```bash
+python manage.py makemigrations
+python manage.py migrate
+```
+
+### Register CustomUser in Admin
+
+Make sure your `CustomUser` is properly registered in the Django admin interface by updating `accounts/admin.py`:
+
+```python
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from .models import CustomUser
+from .forms import CustomUserCreationForm
+
+class CustomUserAdmin(UserAdmin):
+    add_form = CustomUserCreationForm
+    model = CustomUser
+    list_display = ('email', 'first_name', 'last_name', 'is_staff', 'is_active',)
+    list_filter = ('is_staff', 'is_active',)
+    fieldsets = (
+        (None, {'fields': ('email', 'password')}),
+        ('Personal Info', {'fields': ('first_name', 'last_name')}),
+        ('Permissions', {'fields': ('is_staff', 'is_active', 'is_superuser', 'groups', 'user_permissions')}),
+    )
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'first_name', 'last_name', 'password1', 'password2', 'is_staff', 'is_active')}
+        ),
+    )
+    search_fields = ('email',)
+    ordering = ('email',)
+
+admin.site.register(CustomUser, CustomUserAdmin)
+```
+
+### Restart the Development Server
+
+Finally, restart your development server to ensure all changes take effect:
+
+```bash
+python manage.py runserver
+```
+
+Now, you should be able to access the Django admin interface at `http://127.0.0.1:8000/admin/` without encountering the `AttributeError`.
+
+
+
+
+
+
+
+To add a logout button to the home page, you will need to implement a logout view and template in your Django project. Here’s a step-by-step guide to achieve this:
+
+### 1. Create a Logout View
+
+Django provides a built-in view for logging out users. You can use `LogoutView` from `django.contrib.auth.views`.
+
+1. **Update `accounts/urls.py`:**
+   Add the URL pattern for the logout view.
+   ```python
+   from django.urls import path
+   from django.contrib.auth import views as auth_views
+   from .views import register, home, CustomLoginView
+
+   urlpatterns = [
+       path('register/', register, name='register'),
+       path('login/', CustomLoginView.as_view(), name='login'),
+       path('logout/', auth_views.LogoutView.as_view(), name='logout'),
+       path('', home, name='home'),
+   ]
+   ```
+
+2. **Update `settings.py`:**
+   Set the `LOGOUT_REDIRECT_URL` to specify where users should be redirected after logging out.
+   ```python
+   LOGOUT_REDIRECT_URL = '/accounts/login/'
+   ```
+
+### 2. Add a Logout Button to the Home Page
+
+1. **Update `home.html`:**
+   Add a logout button to your home page template.
+
+   `templates/accounts/home.html`:
+   ```html
+   <!DOCTYPE html>
+   <html>
+   <head>
+       <title>Home</title>
+   </head>
+   <body>
+       <h2>Home</h2>
+       <p>Welcome, {{ user.email }}!</p>
+       <form method="post" action="{% url 'logout' %}">
+           {% csrf_token %}
+           <button type="submit">Logout</button>
+       </form>
+   </body>
+   </html>
+   ```
+
+### 3. Test the Logout Functionality
+
+1. **Run the development server:**
+   ```bash
+   python manage.py runserver
+   ```
+
+2. **Navigate to the home page:**
+   - After logging in, go to `http://127.0.0.1:8000/accounts/`.
+   - You should see a "Logout" button on the home page.
+   - Click the "Logout" button to log out.
+
+3. **Verify the redirection:**
+   - After clicking the "Logout" button, you should be redirected to the login page (`/accounts/login/`).
+
+This setup ensures that users can log out from the home page by clicking the logout button, and they will be redirected to the login page after logging out.
