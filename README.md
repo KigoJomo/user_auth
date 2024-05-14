@@ -1,4 +1,4 @@
-# User Registration and Authentication
+# User Registration and Authentication Using Email in Django
 
 ## Basic procedure
 
